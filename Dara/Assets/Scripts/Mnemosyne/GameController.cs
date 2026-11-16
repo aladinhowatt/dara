@@ -230,13 +230,28 @@ namespace Mnemosyne
             S.Ap = Mathf.Max(1, GameState.MaxAp - S.NextDayApPenalty);
             S.NextDayApPenalty = 0;
             S.Phase = Phase.MorningClass;
-            ShowPhase();
+            EnterPhase();
         }
 
         void NextPhase()
         {
             S.Phase = (Phase)((int)S.Phase + 1);
-            ShowPhase();
+            EnterPhase();
+        }
+
+        // Plays the cutscene attached to this phase of the current day (SegmentDef.Before), then shows the phase.
+        void EnterPhase()
+        {
+            var seg = FlowData.Chapter1[flowIndex];
+            string id;
+            if (seg.Kind == SegmentKind.Day && seg.PhaseCutscenes != null && seg.PhaseCutscenes.TryGetValue(S.Phase, out id))
+            {
+                SetGameUi(false);
+                ClearWorld();
+                modal = false;
+                cutscene.Play(CutsceneData.All[id], S, () => { SetGameUi(true); ShowPhase(); });
+            }
+            else ShowPhase();
         }
 
         void ShowPhase()

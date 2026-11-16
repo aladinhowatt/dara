@@ -13,7 +13,7 @@ namespace Mnemosyne
         public int Time;
         public int Ap = MaxAp;
         public int Suspicion = 10;
-        public int Composure = 2, Wit = 2, Strength = 1;
+        public int Composure = 2, Wit = 3, Strength = 1; // Kwin (round 1) starting stats
         public int NextDayApPenalty;
         public string Location = "classroom";
 
@@ -30,7 +30,7 @@ namespace Mnemosyne
         public HashSet<string> KnownNpcs = new HashSet<string>();
         public HashSet<string> Explored = new HashSet<string>();
         public List<string> Codex = new List<string>();
-        public Dictionary<string, int> Affection = new Dictionary<string, int>();
+        public Dictionary<string, int> Affection = new Dictionary<string, int> { { "lin", 2 }, { "khun", 1 } };
 
         public int Aff(string npc) { int v; return Affection.TryGetValue(npc, out v) ? v : 0; }
         public void AddAff(string npc, int d) { Affection[npc] = Aff(npc) + d; }

@@ -71,6 +71,8 @@ namespace Mnemosyne
             lr.anchorMin = new Vector2(0.15f, 0.5f); lr.anchorMax = new Vector2(0.85f, 0.85f);
             lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
             linesText.lineSpacing = 18;
+            linesText.enableAutoSizing = true;
+            linesText.fontSizeMin = 24; linesText.fontSizeMax = 40;
             linesText.gameObject.SetActive(false);
 
             promptText = UiKit.Text(p, font, "", 40, TextAlignmentOptions.Center, Color.white);
@@ -149,7 +151,13 @@ namespace Mnemosyne
             if (!string.IsNullOrEmpty(node.Minigame)) { RunMinigame(); return; }
             if (node.PrepSlots > 0) { ShowPrep(); return; }
 
-            if (!string.IsNullOrEmpty(node.Video))
+            // A clip that is not in StreamingAssets yet falls back to the node's Lines as text.
+            if (!string.IsNullOrEmpty(node.Video) && !System.IO.File.Exists(System.IO.Path.Combine(Application.streamingAssetsPath, node.Video)))
+            {
+                Debug.LogWarning("Cutscene '" + def.Id + "/" + node.Id + "': missing video " + node.Video + ", showing text");
+                ShowLines();
+            }
+            else if (!string.IsNullOrEmpty(node.Video))
             {
                 stage = Stage.Loading;
                 vp.url = System.IO.Path.Combine(Application.streamingAssetsPath, node.Video);

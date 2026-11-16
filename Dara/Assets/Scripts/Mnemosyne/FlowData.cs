@@ -16,6 +16,15 @@ namespace Mnemosyne
 
         public static SegmentDef Cutscene(string id) { return new SegmentDef { Kind = SegmentKind.Cutscene, CutsceneId = id }; }
         public static SegmentDef DayLoop(int day) { return new SegmentDef { Kind = SegmentKind.Day, Day = day }; }
+
+        // Cutscenes that play in the middle of a day, right before the given phase begins.
+        public Dictionary<Phase, string> PhaseCutscenes;
+        public SegmentDef Before(Phase phase, string cutsceneId)
+        {
+            if (PhaseCutscenes == null) PhaseCutscenes = new Dictionary<Phase, string>();
+            PhaseCutscenes[phase] = cutsceneId;
+            return this;
+        }
         public static SegmentDef Night(int day, string cutsceneId = null) { return new SegmentDef { Kind = SegmentKind.Night, Day = day, CutsceneId = cutsceneId }; }
     }
 
@@ -25,8 +34,11 @@ namespace Mnemosyne
         // and register the cutscene in CutsceneData.
         public static readonly List<SegmentDef> Chapter1 = new List<SegmentDef>
         {
-            SegmentDef.Cutscene("intro_nara"),
-            SegmentDef.DayLoop(1), SegmentDef.Night(1),
+            // Monday
+            SegmentDef.Cutscene("mon_intro_nara"),
+            SegmentDef.DayLoop(1).Before(Phase.Free2, "mon_corridor"),
+            SegmentDef.Cutscene("mon_ritual_invite"),
+            SegmentDef.Night(1, "mon_ritual_night"),
             SegmentDef.DayLoop(2), SegmentDef.Night(2),
             SegmentDef.DayLoop(3), SegmentDef.Night(3),
             SegmentDef.DayLoop(4), SegmentDef.Night(4),

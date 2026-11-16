@@ -55,49 +55,7 @@ namespace Mnemosyne
 
         static CutsceneData()
         {
-            var intro = new CutsceneDef { Id = "intro_nara", Start = "greet" };
-
-            intro.Add(new CutsceneNode
-            {
-                Id = "greet",
-                Video = "Video/nara_intro.mp4",
-                Prompt = "แล้วเธอล่ะ ชื่ออะไร?",
-                Choices =
-                {
-                    new ChoiceDef { Id = "name", Text = "ตอบว่า “กอฟ”", Next = "after_name",
-                        Fx = new Effect { Composure = 0 }.Aff("nara", 1).Flag("told_name") },
-                    new ChoiceDef { Id = "silent", Text = "นิ่งเงียบ ไม่ตอบ", Next = "after_silent",
-                        Fx = new Effect { Suspicion = 5, Composure = 1 }.Flag("stayed_silent") },
-                    new ChoiceDef { Id = "askback", Text = "ถามกลับว่า เธอเคยเจอฉันมาก่อนหรือเปล่า?", Next = "after_ask",
-                        Need = Requirement.Wit(3),
-                        Fx = new Effect { Wit = 1, Codex = "นารารู้สึกว่าเคยคุยกับคุณมาก่อน ทั้งที่เธอไม่ควรจำได้" }.Aff("nara", 1).Flag("asked_nara") },
-                }
-            });
-
-            intro.Add(new CutsceneNode { Id = "after_name", Video = "Video/nara_after_name.mp4" });
-
-            intro.Add(new CutsceneNode
-            {
-                Id = "after_silent",
-                Lines = new[]
-                {
-                    "นาราเอียงหัว มองคุณอยู่ครู่หนึ่ง",
-                    "“ไม่เป็นไร ไว้ค่อยบอกก็ได้”",
-                    "เธอยิ้ม แต่ไม่กะพริบตา",
-                }
-            });
-
-            intro.Add(new CutsceneNode
-            {
-                Id = "after_ask",
-                Lines = new[]
-                {
-                    "รอยยิ้มของนาราค้างไปครู่หนึ่ง",
-                    "“...แปลกจัง ฉันก็รู้สึกแบบนั้นเหมือนกัน”",
-                }
-            });
-
-            All[intro.Id] = intro;
+            foreach (var c in CutsceneMonday.Build()) All[c.Id] = c;
 
             All["engine_demo"] = BuildEngineDemo();
         }
