@@ -42,11 +42,9 @@ namespace Mnemosyne
         Transform locList;
         Action onMsgClose;
 
-        GameObject titlePanel, videoPanel, topGo, hintGo, barGo;
-        VideoPlayer vp;
-        RenderTexture videoRt;
-        bool introPlaying;
-        const string IntroFile = "Video/nara_intro.mp4";
+        GameObject titlePanel, topGo, hintGo, barGo;
+        CutscenePlayer cutscene;
+        int flowIndex;
 
         GameObject chapterPanel;
         TextMeshProUGUI chapterTitle, chapterBody, chapterHint;
@@ -124,7 +122,6 @@ namespace Mnemosyne
         void ShowTitle()
         {
             SetGameUi(false);
-            videoPanel.SetActive(false);
             chapterPanel.SetActive(false);
             titlePanel.SetActive(true);
         }
@@ -178,50 +175,55 @@ namespace Mnemosyne
         {
             chapterState = 0;
             chapterPanel.SetActive(false);
-            PlayIntro();
-        }
-
-        void PlayIntro()
-        {
-            videoPanel.SetActive(true);
-            introPlaying = true;
-            if (videoRt == null) videoRt = new RenderTexture(1920, 1080, 0);
-            videoPanel.GetComponentInChildren<RawImage>().texture = videoRt;
-            if (vp == null) vp = gameObject.AddComponent<VideoPlayer>();
-            vp.playOnAwake = false;
-            vp.isLooping = false;
-            vp.source = VideoSource.Url;
-            vp.url = System.IO.Path.Combine(Application.streamingAssetsPath, IntroFile);
-            vp.renderMode = VideoRenderMode.RenderTexture;
-            vp.targetTexture = videoRt;
-            vp.audioOutputMode = VideoAudioOutputMode.Direct;
-            vp.loopPointReached += OnIntroDone;
-            vp.errorReceived += OnIntroError;
-            vp.prepareCompleted += OnIntroPrepared;
-            vp.Prepare();
-        }
-
-        void OnIntroPrepared(VideoPlayer v) { if (introPlaying) v.Play(); }
-        void OnIntroDone(VideoPlayer v) { EndIntro(); }
-        void OnIntroError(VideoPlayer v, string msg) { Debug.LogError("Intro video error: " + msg); EndIntro(); }
-
-        void EndIntro()
-        {
-            if (!introPlaying) return;
-            introPlaying = false;
-            if (vp != null)
-            {
-                vp.loopPointReached -= OnIntroDone;
-                vp.errorReceived -= OnIntroError;
-                vp.prepareCompleted -= OnIntroPrepared;
-                vp.Stop();
-            }
-            videoPanel.SetActive(false);
-            SetGameUi(true);
-            StartDay();
+            StartFlow();
         }
 
         // ---------------------------------------------------------------- flow
+
+        // A chapter is an ordered list of segments (FlowData): cutscenes (video + choices that change
+        // the game state) and day loops (classes, free periods spending AP/time, night).
+        void StartFlow()
+        {
+            flowIndex = -1;
+            NextSegment();
+        }
+
+        bool IsLastSegment { get { return flowIndex >= FlowData.Chapter1.Count - 1; } }
+
+        void NextSegment()
+        {
+            flowIndex++;
+            if (flowIndex >= FlowData.Chapter1.Count)
+            {
+                S = new GameState();
+                StartFlow();
+                return;
+            }
+            var seg = FlowData.Chapter1[flowIndex];
+            if (seg.Kind != SegmentKind.Day && !string.IsNullOrEmpty(seg.CutsceneId))
+            {
+                // Cutscene segment, or a Night segment that plays its own cutscene.
+                if (seg.Kind == SegmentKind.Night) S.Day = seg.Day;
+                SetGameUi(false);
+                ClearWorld();
+                modal = false;
+                cutscene.Play(CutsceneData.All[seg.CutsceneId], S, NextSegment);
+            }
+            else if (seg.Kind == SegmentKind.Night)
+            {
+                // Built-in night summary.
+                S.Day = seg.Day;
+                S.Phase = Phase.Night;
+                SetGameUi(true);
+                ShowPhase();
+            }
+            else
+            {
+                S.Day = seg.Day;
+                SetGameUi(true);
+                StartDay();
+            }
+        }
 
         void StartDay()
         {
@@ -261,12 +263,15 @@ namespace Mnemosyne
                     Refresh();
                     break;
                 case Phase.Night:
+                    // Reached by finishing a Day segment: the day loop ends here, the next segment
+                    // (usually the Night segment of this day) takes over.
+                    if (FlowData.Chapter1[flowIndex].Kind == SegmentKind.Day) { ClearWorld(); NextSegment(); break; }
                     ClearWorld();
                     Refresh();
-                    ShowMsg(NightText(), S.Day >= 5 ? "เริ่มใหม่" : "วันถัดไป", () =>
+                    ShowMsg(NightText(), IsLastSegment ? "เริ่มใหม่" : "วันถัดไป", () =>
                     {
-                        if (S.Day >= 5) { S = new GameState(); StartDay(); }
-                        else { S.Day++; StartDay(); }
+                        if (IsLastSegment) { S = new GameState(); StartFlow(); }
+                        else NextSegment();
                     });
                     break;
             }
@@ -440,13 +445,7 @@ namespace Mnemosyne
                 UpdateChapter(pressed);
                 return;
             }
-            if (introPlaying)
-            {
-                bool skip = (Keyboard.current != null && (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.escapeKey.wasPressedThisFrame))
-                         || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
-                if (skip) EndIntro();
-                return;
-            }
+            if (cutscene != null && cutscene.Active) return;
             if (Mouse.current == null || cam == null) return;
             hover = null;
             bool overUi = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
@@ -564,15 +563,26 @@ namespace Mnemosyne
             world = new GameObject("World").transform;
             var L = Loc;
             float w = L.Size.x, d = L.Size.y;
-            var wallC = new Color(0.16f, 0.19f, 0.19f);
-            Prim(PrimitiveType.Cube, "Floor", new Vector3(0, -0.1f, 0), new Vector3(w, 0.1f, d), new Color(0.30f, 0.34f, 0.33f), false);
-            Prim(PrimitiveType.Cube, "WallN", new Vector3(0, 0, d / 2 + 0.1f), new Vector3(w + 0.4f, 0.3f, 0.2f), wallC, false);
-            Prim(PrimitiveType.Cube, "WallS", new Vector3(0, 0, -d / 2 - 0.1f), new Vector3(w + 0.4f, 0.3f, 0.2f), wallC, false);
-            Prim(PrimitiveType.Cube, "WallE", new Vector3(w / 2 + 0.1f, 0, 0), new Vector3(0.2f, 0.3f, d), wallC, false);
-            Prim(PrimitiveType.Cube, "WallW", new Vector3(-w / 2 - 0.1f, 0, 0), new Vector3(0.2f, 0.3f, d), wallC, false);
+            // A painted top-down map (LocationDef.Background) replaces the blockout floor/walls/decor.
+            Texture2D art = string.IsNullOrEmpty(L.Background) ? null : Resources.Load<Texture2D>(L.Background);
+            if (!string.IsNullOrEmpty(L.Background) && art == null)
+                Debug.LogWarning("Background not found in Resources: " + L.Background + " (falling back to blockout)");
+            if (art != null)
+            {
+                BuildBackdrop(art, w, d);
+            }
+            else
+            {
+                var wallC = new Color(0.16f, 0.19f, 0.19f);
+                Prim(PrimitiveType.Cube, "Floor", new Vector3(0, -0.1f, 0), new Vector3(w, 0.1f, d), new Color(0.30f, 0.34f, 0.33f), false);
+                Prim(PrimitiveType.Cube, "WallN", new Vector3(0, 0, d / 2 + 0.1f), new Vector3(w + 0.4f, 0.3f, 0.2f), wallC, false);
+                Prim(PrimitiveType.Cube, "WallS", new Vector3(0, 0, -d / 2 - 0.1f), new Vector3(w + 0.4f, 0.3f, 0.2f), wallC, false);
+                Prim(PrimitiveType.Cube, "WallE", new Vector3(w / 2 + 0.1f, 0, 0), new Vector3(0.2f, 0.3f, d), wallC, false);
+                Prim(PrimitiveType.Cube, "WallW", new Vector3(-w / 2 - 0.1f, 0, 0), new Vector3(0.2f, 0.3f, d), wallC, false);
 
-            foreach (var dc in L.Decor)
-                Prim(PrimitiveType.Cube, "Decor", new Vector3(dc.x, 0.2f, dc.y), new Vector3(dc.z, 0.4f, dc.w), new Color(0.36f, 0.30f, 0.24f), false);
+                foreach (var dc in L.Decor)
+                    Prim(PrimitiveType.Cube, "Decor", new Vector3(dc.x, 0.2f, dc.y), new Vector3(dc.z, 0.4f, dc.w), new Color(0.36f, 0.30f, 0.24f), false);
+            }
 
             foreach (var o in L.Objects)
             {
@@ -581,7 +591,11 @@ namespace Mnemosyne
                 Color baseC = o.Kind == ObjKind.Rest ? new Color(0.45f, 0.36f, 0.27f)
                     : o.Locked != null ? new Color(0.45f, 0.25f, 0.25f)
                     : explored ? new Color(0.32f, 0.40f, 0.42f) : new Color(0.40f, 0.58f, 0.64f);
-                var g = Prim(PrimitiveType.Cube, "Obj_" + o.Id, new Vector3(o.Pos.x, 0.4f, o.Pos.y), new Vector3(o.Size.x, 0.8f, o.Size.y), baseC, true);
+                // On a painted map the desk art is already there: use an invisible hotspot that only lights up on hover/mode.
+                if (art != null) baseC = new Color(baseC.r, baseC.g, baseC.b, 0f);
+                var g = art != null
+                    ? Overlay("Obj_" + o.Id, new Vector3(o.Pos.x, 0.05f, o.Pos.y), new Vector3(o.Size.x, 0.05f, o.Size.y), baseC)
+                    : Prim(PrimitiveType.Cube, "Obj_" + o.Id, new Vector3(o.Pos.x, 0.4f, o.Pos.y), new Vector3(o.Size.x, 0.8f, o.Size.y), baseC, true);
                 var h = g.AddComponent<Hotspot>(); h.Obj = o; h.R = g.GetComponent<Renderer>(); h.Base = baseC;
                 hotspots.Add(h);
                 bool showName = o.Kind == ObjKind.Rest || explored;
@@ -602,8 +616,61 @@ namespace Mnemosyne
             }
 
             float aspect = cam.aspect;
-            cam.orthographicSize = Mathf.Max(d / 2f + 2.0f, (w / 2f + 0.8f) / aspect);
-            cam.transform.position = new Vector3(0, 20, -0.2f);
+            if (art != null)
+            {
+                // Fit the map between the HUD top bar (70px) and the hint + command bars (148px) of a 1080px-high screen.
+                float size = Mathf.Max(d / 2f / (862f / 1080f), (w / 2f + 0.3f) / aspect);
+                cam.orthographicSize = size;
+                cam.transform.position = new Vector3(0, 20, -0.2f - size * 2f * (39f / 1080f));
+            }
+            else
+            {
+                cam.orthographicSize = Mathf.Max(d / 2f + 2.0f, (w / 2f + 0.8f) / aspect);
+                cam.transform.position = new Vector3(0, 20, -0.2f);
+            }
+        }
+
+        void BuildBackdrop(Texture2D tex, float w, float d)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = "Backdrop";
+            q.transform.SetParent(world, false);
+            q.transform.localPosition = new Vector3(0, -0.1f, 0);
+            q.transform.localRotation = Quaternion.Euler(90, 0, 0);
+            q.transform.localScale = new Vector3(w, d, 1);
+            Destroy(q.GetComponent<Collider>());
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Texture");
+            var m = new Material(sh);
+            m.mainTexture = tex;
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+            q.GetComponent<Renderer>().material = m;
+        }
+
+        // Transparent flat box used as an invisible click target over painted art.
+        GameObject Overlay(string name, Vector3 pos, Vector3 scale, Color c)
+        {
+            var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            g.name = name;
+            g.transform.SetParent(world, false);
+            g.transform.localPosition = pos;
+            g.transform.localScale = scale;
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = unlit;
+            var m = new Material(sh);
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = 3000;
+            m.SetColor("_BaseColor", c);
+            m.color = c;
+            g.GetComponent<Renderer>().material = m;
+            return g;
         }
 
         // ------------------------------------------------------------------- UI
@@ -662,7 +729,9 @@ namespace Mnemosyne
         {
             var g = new GameObject("Btn_" + label, typeof(RectTransform));
             g.transform.SetParent(parent, false);
-            g.AddComponent<UIImage>().color = new Color(0.14f, 0.26f, 0.25f);
+            var bimg = g.AddComponent<UIImage>();
+            bimg.color = new Color(0.14f, 0.26f, 0.25f);
+            UiKit.SkinButton(bimg);
             var b = g.AddComponent<Button>();
             g.AddComponent<LayoutElement>();
             MakeText(g.transform, label, 26, TextAlignmentOptions.Center, new Color(0.7f, 0.97f, 0.9f));
@@ -683,6 +752,7 @@ namespace Mnemosyne
             var dark = new Color(0.05f, 0.08f, 0.08f, 0.9f);
 
             var top = Panel(cgo.transform, "TopBar", dark, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -70), Vector2.zero);
+            UiKit.SkinBar(top.GetComponent<UIImage>(), "ui_bar_top");
             hud = MakeText(top, "", 26, TextAlignmentOptions.MidlineLeft, TextC);
             topGo = top.gameObject;
 
@@ -691,6 +761,7 @@ namespace Mnemosyne
             hintGo = hintP.gameObject;
 
             var bar = Panel(cgo.transform, "CommandBar", dark, new Vector2(0, 0), new Vector2(1, 0), Vector2.zero, new Vector2(0, 100));
+            UiKit.SkinBar(bar.GetComponent<UIImage>(), "ui_bar_bottom");
             barGo = bar.gameObject;
             var hl = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
             hl.padding = new RectOffset(30, 30, 14, 14); hl.spacing = 20;
@@ -702,6 +773,7 @@ namespace Mnemosyne
             cmdButtons.Add(MakeButton(bar, "จบช่วงนี้", () => { if (!modal && S.IsFree) EndPeriod(); }));
 
             var mp = Panel(cgo.transform, "MsgPanel", new Color(0.05f, 0.08f, 0.08f, 0.96f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-500, -250), new Vector2(500, 250));
+            UiKit.SkinPanel(mp.GetComponent<UIImage>());
             msgPanel = mp.gameObject;
             var mt = MakeText(mp, "", 28, TextAlignmentOptions.TopLeft, TextC);
             mt.enableAutoSizing = true; mt.fontSizeMin = 18; mt.fontSizeMax = 28;
@@ -715,6 +787,7 @@ namespace Mnemosyne
             msgPanel.SetActive(false);
 
             var lp = Panel(cgo.transform, "LocPanel", new Color(0.05f, 0.08f, 0.08f, 0.97f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-440, -340), new Vector2(440, 340));
+            UiKit.SkinPanel(lp.GetComponent<UIImage>());
             locPanel = lp.gameObject;
             locTitle = MakeText(lp, "จะไปที่ไหน?", 30, TextAlignmentOptions.Center, Teal);
             var ltr = locTitle.GetComponent<RectTransform>();
@@ -728,16 +801,6 @@ namespace Mnemosyne
             vl.spacing = 8; vl.childControlWidth = true; vl.childControlHeight = true; vl.childForceExpandWidth = true; vl.childForceExpandHeight = false;
             locList = listGo.transform;
             locPanel.SetActive(false);
-
-            var vpn = Panel(cgo.transform, "VideoPanel", Color.black, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            videoPanel = vpn.gameObject;
-            var rawGo = new GameObject("Video", typeof(RectTransform));
-            rawGo.transform.SetParent(vpn, false);
-            rawGo.AddComponent<RawImage>();
-            var rr = rawGo.GetComponent<RectTransform>();
-            rr.anchorMin = Vector2.zero; rr.anchorMax = Vector2.one; rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
-            MakeText(vpn, "คลิกหรือกด Space เพื่อข้าม", 22, TextAlignmentOptions.BottomRight, new Color(1, 1, 1, 0.5f));
-            videoPanel.SetActive(false);
 
             var cp = Panel(cgo.transform, "ChapterPanel", Color.black, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             chapterPanel = cp.gameObject;
@@ -767,6 +830,10 @@ namespace Mnemosyne
             sbr.anchorMin = new Vector2(0.5f, 0.3f); sbr.anchorMax = new Vector2(0.5f, 0.3f); sbr.pivot = new Vector2(0.5f, 0.5f);
             sbr.sizeDelta = new Vector2(360, 84); sbr.anchoredPosition = Vector2.zero;
             titlePanel.SetActive(false);
+
+            // Created last so the cutscene panel is drawn on top of every other screen.
+            cutscene = gameObject.AddComponent<CutscenePlayer>();
+            cutscene.Init(cgo.transform, thaiFont);
         }
 
         void ShowMsg(string text, string button, Action onClose)

@@ -26,6 +26,9 @@ namespace Mnemosyne
     {
         public string Id, Name;
         public Vector2 Size;
+        // Optional Resources path (e.g. "Mnemosyne/classroom_topdown") of a top-down painted map.
+        // When present it replaces the blockout floor/walls/decor; Size must match the image aspect.
+        public string Background;
         public int TravelTime = 1;
         public bool Free2Only, Closed;
         public string ClosedReason;
@@ -43,11 +46,13 @@ namespace Mnemosyne
 
         static GameData()
         {
-            var classroom = new LocationDef { Id = "classroom", Name = "ห้องเรียน ม.5/3", Size = new Vector2(16, 10), TravelTime = 0 };
-            classroom.Objects.Add(new ObjectDef { Id = "desk", Name = "โต๊ะของฉัน", Kind = ObjKind.Rest, Pos = new Vector2(-5.5f, -3), Size = new Vector2(1.6f, 1.2f), Time = 2, Ap = 0, ApGain = 2, Desc = "คุณฟุบหน้าลงกับโต๊ะริมหน้าต่าง หมอกด้านนอกแนบติดกระจก" });
-            classroom.Objects.Add(new ObjectDef { Id = "emptydesk", Name = "โต๊ะว่าง", Pos = new Vector2(3, 3), Size = new Vector2(1.6f, 1.2f), Time = 1, Ap = 1, Codex = "นักเรียนไม่มีใครสนใจโต๊ะว่าง แต่ครูทำเครื่องหมายไว้ทุกตัว", Desc = "โต๊ะที่ไม่มีชื่อใครติดอยู่ ฝุ่นบนโต๊ะเพิ่งถูกเช็ดไปไม่นาน" });
-            classroom.Objects.Add(new ObjectDef { Id = "calendar", Name = "ปฏิทินบนผนัง", Pos = new Vector2(7.6f, 0), Size = new Vector2(0.4f, 2.4f), Time = 1, Ap = 1, Codex = "ปฏิทินถูกขีดทับซ้ำแล้วซ้ำเล่า", Desc = "รอยปากกาแดงทับกันหลายชั้น ขีดฆ่าสัปดาห์เดิมเป็นครั้งแล้วครั้งเล่า" });
-            classroom.Objects.Add(new ObjectDef { Id = "board", Name = "กระดานดำ", Pos = new Vector2(0, 4.6f), Size = new Vector2(7, 0.4f), Time = 1, Ap = 0, Desc = "เนื้อหาคาบเมื่อกี้ยังอยู่บนกระดาน ใต้ตัวหนังสือมีรอยชอล์กจางๆ เขียนว่า 'ใครหายไป?'" });
+            var classroom = new LocationDef { Id = "classroom", Name = "ห้องเรียน ม.5/3", Size = new Vector2(17.7f, 10f), Background = "Mnemosyne/classroom_topdown", TravelTime = 0 };
+            // Positions below are matched to the painted map (4x4 desk grid, board on the north wall, calendar on the east wall).
+            classroom.NpcSlots = new[] { new Vector2(-2.65f, 0.64f), new Vector2(2.83f, -2.04f), new Vector2(0.09f, -0.62f), new Vector2(-5.9f, 0.6f) };
+            classroom.Objects.Add(new ObjectDef { Id = "desk", Name = "โต๊ะของฉัน", Kind = ObjKind.Rest, Pos = new Vector2(-4.0f, -1.3f), Size = new Vector2(1.5f, 1.0f), Time = 2, Ap = 0, ApGain = 2, Desc = "คุณฟุบหน้าลงกับโต๊ะริมหน้าต่าง หมอกด้านนอกแนบติดกระจก" });
+            classroom.Objects.Add(new ObjectDef { Id = "emptydesk", Name = "โต๊ะว่าง", Pos = new Vector2(4.2f, 1.45f), Size = new Vector2(1.5f, 1.0f), Time = 1, Ap = 1, Codex = "นักเรียนไม่มีใครสนใจโต๊ะว่าง แต่ครูทำเครื่องหมายไว้ทุกตัว", Desc = "โต๊ะที่ไม่มีชื่อใครติดอยู่ ฝุ่นบนโต๊ะเพิ่งถูกเช็ดไปไม่นาน" });
+            classroom.Objects.Add(new ObjectDef { Id = "calendar", Name = "ปฏิทินบนผนัง", Pos = new Vector2(7.45f, 2.25f), Size = new Vector2(0.8f, 1.3f), Time = 1, Ap = 1, Codex = "ปฏิทินถูกขีดทับซ้ำแล้วซ้ำเล่า", Desc = "รอยปากกาแดงทับกันหลายชั้น ขีดฆ่าสัปดาห์เดิมเป็นครั้งแล้วครั้งเล่า" });
+            classroom.Objects.Add(new ObjectDef { Id = "board", Name = "กระดานดำ", Pos = new Vector2(-0.05f, 4.05f), Size = new Vector2(6.8f, 1.2f), Time = 1, Ap = 0, Desc = "เนื้อหาคาบเมื่อกี้ยังอยู่บนกระดาน ใต้ตัวหนังสือมีรอยชอล์กจางๆ เขียนว่า 'ใครหายไป?'" });
             Add(classroom);
 
             var canteen = new LocationDef { Id = "canteen", Name = "โรงอาหาร", Size = new Vector2(16, 10) };
