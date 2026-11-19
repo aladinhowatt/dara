@@ -44,6 +44,8 @@ namespace Mnemosyne
 
         GameObject titlePanel, topGo, hintGo, barGo;
         CutscenePlayer cutscene;
+        GameObject cctvGo;
+        TextMeshProUGUI cctvCam, cctvTime, cctvRec;
         int flowIndex;
 
         GameObject chapterPanel;
@@ -460,6 +462,7 @@ namespace Mnemosyne
                 UpdateChapter(pressed);
                 return;
             }
+            if (cctvRec != null && cctvGo != null && cctvGo.activeSelf) cctvRec.text = Mathf.FloorToInt(Time.unscaledTime * 1.2f) % 2 == 0 ? "REC" : "";
             if (cutscene != null && cutscene.Active) return;
             if (Mouse.current == null || cam == null) return;
             hover = null;
@@ -527,6 +530,7 @@ namespace Mnemosyne
             if (world != null) { world.gameObject.SetActive(false); Destroy(world.gameObject); }
             hotspots.Clear();
             world = null;
+            if (cctvGo != null) cctvGo.SetActive(false);
         }
 
         GameObject Prim(PrimitiveType t, string name, Vector3 pos, Vector3 scale, Color c, bool collider)
@@ -624,12 +628,17 @@ namespace Mnemosyne
                 bool known = S.KnownNpcs.Contains(id);
                 var slot = L.NpcSlots[i];
                 Color c = known ? Amber : new Color(0.50f, 0.54f, 0.54f);
-                var g = Prim(PrimitiveType.Cylinder, "Npc_" + id, new Vector3(slot.x, 0.9f, slot.y), new Vector3(0.8f, 0.9f, 0.8f), c, true);
+                string pose = (L.NpcPoses != null && i < L.NpcPoses.Length) ? L.NpcPoses[i] : "stand";
+                if (art != null && BuildFigure(id, GameData.Npcs[id].Female, pose, slot, known, c)) continue;
+                var g = art != null
+                    ? Prim(PrimitiveType.Cylinder, "Npc_" + id, new Vector3(slot.x, 0.1f, slot.y), new Vector3(0.7f, 0.02f, 0.7f), c, true) // flat marker on the camera image
+                    : Prim(PrimitiveType.Cylinder, "Npc_" + id, new Vector3(slot.x, 0.9f, slot.y), new Vector3(0.8f, 0.9f, 0.8f), c, true);
                 var h = g.AddComponent<Hotspot>(); h.NpcId = id; h.R = g.GetComponent<Renderer>(); h.Base = c;
                 hotspots.Add(h);
                 Label(known ? GameData.Npcs[id].Name : "?", new Vector3(slot.x, 2.0f, slot.y), known ? new Color(1f, 0.85f, 0.5f) : Teal, known ? 3.6f : 7f);
             }
 
+            if (cctvGo != null) cctvGo.SetActive(art != null);
             float aspect = cam.aspect;
             if (art != null)
             {
@@ -643,6 +652,73 @@ namespace Mnemosyne
                 cam.orthographicSize = Mathf.Max(d / 2f + 2.0f, (w / 2f + 0.8f) / aspect);
                 cam.transform.position = new Vector3(0, 20, -0.2f);
             }
+        }
+
+
+        static Texture2D discTex;
+
+        // Round icon background (ring + translucent fill), generated once.
+        static Texture2D DiscTexture()
+        {
+            if (discTex != null) return discTex;
+            const int n = 128;
+            discTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float r = Vector2.Distance(new Vector2(x, y), new Vector2(n / 2f, n / 2f)) / (n / 2f);
+                    float a = r > 1f ? 0f : r > 0.86f ? 1f : 0.72f;
+                    discTex.SetPixel(x, y, new Color(1, 1, 1, a));
+                }
+            discTex.Apply();
+            return discTex;
+        }
+
+        GameObject TexQuad(string name, Texture tex, Vector3 center, Vector2 size, Color tint)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = name;
+            q.transform.SetParent(world, false);
+            q.transform.localPosition = center;
+            q.transform.localRotation = Quaternion.Euler(90, 0, 0);
+            q.transform.localScale = new Vector3(size.x, size.y, 1);
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = unlit;
+            var m = new Material(sh);
+            m.SetFloat("_Surface", 1f); m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = 3000;
+            m.mainTexture = tex;
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            m.SetColor("_BaseColor", tint); m.color = tint;
+            q.GetComponent<Renderer>().material = m;
+            return q;
+        }
+
+        // A character cut-out standing/sitting on the camera image (foot point = slot), with a round icon above the head.
+        // Gender is shown by the silhouette (skirt/long hair vs trousers/short hair); identity only by the icon.
+        bool BuildFigure(string npcId, bool female, string pose, Vector2 slot, bool known, Color iconColor)
+        {
+            var tex = Resources.Load<Texture2D>("Mnemosyne/fig_" + (female ? "female" : "male") + "_" + pose);
+            if (tex == null) return false;
+            // Perspective: figures higher up the picture (further from the camera) are smaller.
+            float sc = Mathf.Lerp(1.4f, 0.6f, Mathf.InverseLerp(-5f, 5f, slot.y)) * (pose == "sit" ? 0.8f : 1f);
+            float fh = 1.9f * sc, fw = fh * tex.width / tex.height;
+            float lift = 0.2f + (5f - slot.y) * 0.01f; // nearer (lower on screen) figures draw on top
+            var fig = TexQuad("Npc_" + npcId, tex, new Vector3(slot.x, lift, slot.y + fh / 2f), new Vector2(fw, fh), new Color(0.88f, 0.9f, 0.92f));
+            var h = fig.AddComponent<Hotspot>(); h.NpcId = npcId; h.R = fig.GetComponent<Renderer>(); h.Base = new Color(0.88f, 0.9f, 0.92f);
+            hotspots.Add(h);
+
+            var ic = TexQuad("Icon_" + npcId, DiscTexture(), new Vector3(slot.x, lift + 0.02f, slot.y + fh + 0.4f), new Vector2(0.62f, 0.62f), iconColor);
+            var ih = ic.AddComponent<Hotspot>(); ih.NpcId = npcId; ih.R = ic.GetComponent<Renderer>(); ih.Base = iconColor;
+            hotspots.Add(ih);
+            string glyph = known ? GameData.Npcs[npcId].Name.Substring(0, 1) : "?";
+            Label(glyph, new Vector3(slot.x, lift + 0.5f, slot.y + fh + 0.4f), known ? new Color(0.1f, 0.08f, 0.04f) : new Color(0.08f, 0.12f, 0.12f), 4.5f);
+            return true;
         }
 
         void BuildBackdrop(Texture2D tex, float w, float d)
@@ -766,6 +842,22 @@ namespace Mnemosyne
             cgo.AddComponent<GraphicRaycaster>();
             var dark = new Color(0.05f, 0.08f, 0.08f, 0.9f);
 
+            // CCTV frame labels: laid over the corners of the camera image (image area = 1540x862 px, centred 39px above screen centre).
+            var ch = Panel(cgo.transform, "CctvHud", Color.clear, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-770, -392), new Vector2(770, 470));
+            ch.GetComponent<UIImage>().raycastTarget = false;
+            cctvGo = ch.gameObject;
+            var mono = new Color(0.92f, 0.96f, 0.94f);
+            cctvCam = MakeText(ch, "", 34, TextAlignmentOptions.TopLeft, mono);
+            var cr = cctvCam.GetComponent<RectTransform>(); cr.anchorMin = new Vector2(0, 1); cr.anchorMax = new Vector2(0, 1); cr.pivot = new Vector2(0, 1);
+            cr.sizeDelta = new Vector2(520, 64); cr.anchoredPosition = new Vector2(10, -4);
+            cctvRec = MakeText(ch, "", 34, TextAlignmentOptions.TopRight, new Color(0.95f, 0.15f, 0.15f));
+            var rr2 = cctvRec.GetComponent<RectTransform>(); rr2.anchorMin = new Vector2(1, 1); rr2.anchorMax = new Vector2(1, 1); rr2.pivot = new Vector2(1, 1);
+            rr2.sizeDelta = new Vector2(200, 64); rr2.anchoredPosition = new Vector2(-10, -4);
+            cctvTime = MakeText(ch, "", 34, TextAlignmentOptions.BottomLeft, mono);
+            var tr3 = cctvTime.GetComponent<RectTransform>(); tr3.anchorMin = new Vector2(0, 0); tr3.anchorMax = new Vector2(0, 0); tr3.pivot = new Vector2(0, 0);
+            tr3.sizeDelta = new Vector2(520, 64); tr3.anchoredPosition = new Vector2(10, 4);
+            cctvGo.SetActive(false);
+
             var top = Panel(cgo.transform, "TopBar", dark, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -70), Vector2.zero);
             UiKit.SkinBar(top.GetComponent<UIImage>(), "ui_bar_top");
             hud = MakeText(top, "", 26, TextAlignmentOptions.MidlineLeft, TextC);
@@ -875,6 +967,12 @@ namespace Mnemosyne
             if (S.IsFree) for (int i = 0; i < GameState.FreeTime; i++) pips += i < S.Time ? "[#]" : "[ ]";
             string phase = S.Phase == Phase.Free1 ? "ช่วงอิสระ 1" : S.Phase == Phase.Free2 ? "ช่วงอิสระ 2" : S.Phase == Phase.MorningClass ? "คาบเช้า" : S.Phase == Phase.AfternoonClass ? "คาบบ่าย" : "กลางคืน";
             string where = S.IsFree ? Loc.Name : "โรงเรียน";
+            if (cctvCam != null && S.IsFree)
+            {
+                int mins = (S.Phase == Phase.Free1 ? 10 * 60 + 30 : 15 * 60 + 30) + (GameState.FreeTime - S.Time) * 15;
+                cctvCam.text = ThaiShaper.Fix("CAM " + (System.Array.IndexOf(GameData.LocationOrder, S.Location) + 1).ToString("00") + "  " + Loc.Name);
+                cctvTime.text = "2026-09-" + (13 + S.Day) + "  " + (mins / 60).ToString("00") + ":" + (mins % 60).ToString("00") + ":18";
+            }
             hud.text = ThaiShaper.Fix(where + "  |  " + GameState.DayNames[S.Day] + "  |  " + phase + "     เวลา " + pips + "     AP " + S.Ap + "/" + GameState.MaxAp + "     ความสงสัย " + S.Suspicion + "     แฟ้มความรู้ " + S.Codex.Count);
         }
     }

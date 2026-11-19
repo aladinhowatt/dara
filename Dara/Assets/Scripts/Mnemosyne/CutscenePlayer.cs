@@ -20,6 +20,10 @@ namespace Mnemosyne
         TMP_FontAsset font;
         GameObject panel;
         RawImage raw;
+        GameObject band; // dark plate behind the text so it reads over a still
+
+        // While true, clips are skipped: a node shows its Still (first frame) plus its Lines as text.
+        public static bool StillsOnly = true;
         RenderTexture rt;
         VideoPlayer vp;
         TextMeshProUGUI promptText, linesText, hintText, titleText;
@@ -65,6 +69,9 @@ namespace Mnemosyne
             tr.anchorMin = new Vector2(0.1f, 0.86f); tr.anchorMax = new Vector2(0.9f, 0.96f);
             tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
             titleText.gameObject.SetActive(false);
+
+            band = UiKit.Panel(p, "TextBand", new Color(0, 0, 0, 0.6f), new Vector2(0.1f, 0.48f), new Vector2(0.9f, 0.88f), Vector2.zero, Vector2.zero).gameObject;
+            band.SetActive(false);
 
             linesText = UiKit.Text(p, font, "", 40, TextAlignmentOptions.Center, UiKit.TextC);
             var lr = linesText.GetComponent<RectTransform>();
@@ -120,6 +127,7 @@ namespace Mnemosyne
             S = state;
             onDone = done;
             panel.SetActive(true);
+            raw.texture = rt; raw.color = Color.white; // blank until the first node sets its still
             EnterNode(def.Start);
         }
 
@@ -130,6 +138,7 @@ namespace Mnemosyne
             ClearChoices();
             promptText.gameObject.SetActive(false);
             linesText.gameObject.SetActive(false);
+            band.SetActive(false);
             hintText.gameObject.SetActive(false);
             titleText.gameObject.SetActive(false);
 
@@ -151,14 +160,23 @@ namespace Mnemosyne
             if (!string.IsNullOrEmpty(node.Minigame)) { RunMinigame(); return; }
             if (node.PrepSlots > 0) { ShowPrep(); return; }
 
-            // A clip that is not in StreamingAssets yet falls back to the node's Lines as text.
-            if (!string.IsNullOrEmpty(node.Video) && !System.IO.File.Exists(System.IO.Path.Combine(Application.streamingAssetsPath, node.Video)))
+            // Still frame: a node's Still replaces the picture; nodes without one keep the previous picture.
+            if (!string.IsNullOrEmpty(node.Still))
             {
-                Debug.LogWarning("Cutscene '" + def.Id + "/" + node.Id + "': missing video " + node.Video + ", showing text");
+                var tex = Resources.Load<Texture2D>(node.Still);
+                if (tex != null) { raw.texture = tex; raw.color = new Color(0.62f, 0.62f, 0.62f, 1); }
+                else Debug.LogWarning("Cutscene '" + def.Id + "/" + node.Id + "': missing still " + node.Still);
+            }
+
+            // A clip that is not in StreamingAssets yet (or StillsOnly) falls back to the node's Lines as text.
+            if (!string.IsNullOrEmpty(node.Video) && (StillsOnly || !System.IO.File.Exists(System.IO.Path.Combine(Application.streamingAssetsPath, node.Video))))
+            {
+                if (!StillsOnly) Debug.LogWarning("Cutscene '" + def.Id + "/" + node.Id + "': missing video " + node.Video + ", showing text");
                 ShowLines();
             }
             else if (!string.IsNullOrEmpty(node.Video))
             {
+                raw.texture = rt; raw.color = Color.white;
                 stage = Stage.Loading;
                 vp.url = System.IO.Path.Combine(Application.streamingAssetsPath, node.Video);
                 vp.Prepare();
@@ -208,6 +226,7 @@ namespace Mnemosyne
             if (hasLines)
             {
                 linesText.text = ThaiShaper.Fix(string.Join("\n\n", node.Lines));
+                band.SetActive(true);
                 linesText.gameObject.SetActive(true);
             }
             if (hasTitle)

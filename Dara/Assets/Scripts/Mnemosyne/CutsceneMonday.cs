@@ -26,7 +26,7 @@ namespace Mnemosyne
             var d = new CutsceneDef { Id = "mon_intro_nara", Start = "ask" };
             d.Add(new CutsceneNode
             {
-                Id = "ask", Video = "Video/mon_intro_nara.mp4",
+                Id = "ask", Video = "Video/mon_intro_nara.mp4", Still = "Mnemosyne/cs_m1_ask",
                 Lines = new[] { "นารา: นายมาใหม่นี่ นายชื่ออะไร" },
                 Prompt = "นายมาใหม่นี่ นายชื่ออะไร",
                 Choices =
@@ -60,11 +60,13 @@ namespace Mnemosyne
             var d = new CutsceneDef { Id = "mon_corridor", Start = "talk" };
             d.Add(new CutsceneNode
             {
-                Id = "talk", Video = "Video/mon_corridor_kwin_lin.mp4",
+                Id = "talk", Video = "Video/mon_corridor_kwin_lin_v2.mp4", Still = "Mnemosyne/cs_m2_corridor", // re-render needed: the old clip has the old line; falls back to text meanwhile
                 Lines = new[]
                 {
-                    "ลิน: (กระซิบ) กวิน... โต๊ะริมหน้าต่างตัวนั้น เมื่อวานมีคนนั่งอยู่ใช่ไหม",
-                    "กวิน: ...ใช่ ฉันก็จำได้",
+                    "ลิน: (กระซิบ ดึงกวินมาข้างตู้ล็อกเกอร์) นายคือเด็กใหม่ใช่ไหม ฉันลิน",
+                    "ลิน: โต๊ะริมหน้าต่างตัวนั้น เมื่อวานมีคนนั่งอยู่ ฉันจำได้ชัดเลย แต่วันนี้ทุกคนทำเหมือนไม่เคยมี",
+                    "กวิน: เมื่อวานฉันยังไม่ได้มา... แต่ทำไมเธอถึงบอกฉัน",
+                    "ลิน: เพราะนายเป็นคนเดียวที่ยังไม่ทำเหมือนมันเป็นเรื่องปกติ",
                 },
                 Prompt = "กวินจะบอกลินว่าอย่างไร",
                 Choices =
@@ -96,7 +98,7 @@ namespace Mnemosyne
             var d = new CutsceneDef { Id = "mon_ritual_invite", Start = "invite" };
             d.Add(new CutsceneNode
             {
-                Id = "invite", Video = "Video/mon_ritual_invite.mp4",
+                Id = "invite", Video = "Video/mon_ritual_invite.mp4", Still = "Mnemosyne/cs_m3_invite",
                 Lines = new[]
                 {
                     "นารา: ถ้าอยากรู้ว่าคนที่หายไปคือใคร ฉันรู้วิธีนะ",
@@ -137,7 +139,7 @@ namespace Mnemosyne
             var d = new CutsceneDef { Id = "mon_ritual_night", Start = "ritual" };
             d.Add(new CutsceneNode
             {
-                Id = "ritual", Video = "Video/mon_ritual_night.mp4",
+                Id = "ritual", Video = "Video/mon_ritual_night.mp4", Still = "Mnemosyne/cs_m4_ritual",
                 Lines = new[]
                 {
                     "นารา: (เสียงเบา) ทุกคนจับมือกัน คิดถึงคนที่หายไปแล้วถามในใจ “เขาคือใคร”",
@@ -170,7 +172,7 @@ namespace Mnemosyne
                 "กวิน: ฉันก็อยู่"));
             d.Add(new CutsceneNode
             {
-                Id = "close", Video = "Video/mon_marked.mp4", Next = "marked",
+                Id = "close", Video = "Video/mon_marked.mp4", Still = "Mnemosyne/cs_m4_marked", Next = "marked",
                 Lines = new[]
                 {
                     "(เทียนดับพร้อมกันทุกเล่ม ข้อมือซ้ายของกวินและลินมีรอยสีซีดประทับ นาราจ้องมองรอยนั้นแล้วยิ้มเบา ๆ)",

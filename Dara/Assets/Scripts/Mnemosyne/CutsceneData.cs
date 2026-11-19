@@ -23,6 +23,7 @@ namespace Mnemosyne
     public class CutsceneNode
     {
         public string Id, Video, Prompt, Next, Title;
+        public string Still; // first-frame image under Resources (e.g. "Mnemosyne/cs_m1_ask"); shown with Lines while clips are not rendered
         public string[] Lines;
         public float PauseAt = -1f;
         public Effect Fx;

@@ -30,7 +30,7 @@ namespace Mnemosyne
         public HashSet<string> KnownNpcs = new HashSet<string>();
         public HashSet<string> Explored = new HashSet<string>();
         public List<string> Codex = new List<string>();
-        public Dictionary<string, int> Affection = new Dictionary<string, int> { { "lin", 2 }, { "khun", 1 } };
+        public Dictionary<string, int> Affection = new Dictionary<string, int>(); // everyone is a stranger on day one: the player is the new student
 
         public int Aff(string npc) { int v; return Affection.TryGetValue(npc, out v) ? v : 0; }
         public void AddAff(string npc, int d) { Affection[npc] = Aff(npc) + d; }
